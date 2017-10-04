@@ -1,8 +1,12 @@
 <?php
+// Be verbose when reporting errors
 error_reporting(-1);
 ini_set('display_errors', 'On');
+// Grab the classes
 require_once('lib.php');
+// If this is production (since I develop on Windows)...
 if (php_uname('s') == 'Linux') {
+    // Configure sessions to store properly
     ini_set('session.save_path', '/tmp');
     ini_set('session.name', 'NotPHPSESSID');
     ini_set('session.cookie_lifetime', 1000000);
@@ -12,25 +16,34 @@ if (php_uname('s') == 'Linux') {
 }
 session_start();
 
+// Compare two attribute sets
 $attrSetsCmp = function($a, $b) {
     if ($a->equals($b)) return 0;
     if ($a->containsAll($b)) return 1;
     return -1;
 };
 
+// Align an actual array with an expected array so as to minimize the Levenshtein distance between aligned pairs
+// (probably; I haven't tested this exhaustively or even directly, but it's only used to get hints)
 function levAlign($exp, $act) {
+    // Lengths should be the same
     assert(count($exp) == count($act));
+    // Find all the pairs and their Levenshtein distance
     $allPairs = [];
     for ($i = 0; $i < count($exp); $i++) {
         for ($j = 0; $j < count($act); $j++) {
             $allPairs[] = [levenshtein($exp[$i], $act[$j]), $i, $j];
         }
     }
+    // Sort by Levenshtein distance
     sort($allPairs);
     $result = [];
+    // For every pair...
     for ($i = 0; $i < count($allPairs); $i++) {
         list(, $eI, $aI) = $allPairs[$i];
+        // If we haven't used either the expected or the actual yet...
         if (isset($exp[$eI]) && isset($act[$aI])) {
+            // Align this actual with this expected
             $result[$eI] = $act[$aI];
             unset($exp[$eI]);
             unset($act[$aI]);
@@ -39,18 +52,27 @@ function levAlign($exp, $act) {
     return $result;
 }
 
+// If there isn't a relation, or there's an old batch of problems from before I added decompositions,
+// or the user asked to reroll...
 if (!isset($_SESSION['rel']) || !isset($_SESSION['dec-opts']) || isset($_REQUEST['reroll'])) {
+    // Make and save a random relation R
     $_SESSION['rel'] = Relation::random();
     $rel = $_SESSION['rel'];
 
+    // Get some subsets of R's attributes for later
     $attrSets = $rel->attrs->allSubsets();
     $nonempty = function($x) { return count($x->contents) > 0; };
     $attrSets = array_values(array_filter($attrSets, $nonempty));
 
+    // Find the single-attribute subsets of R
     $smallAttrSets = array_values(array_filter($attrSets, function($x) { return count($x->contents) == 1; }));
+    // Find the multi-attribute subsets of R
     $largeAttrSets = array_values(array_filter($attrSets, function($x) { return count($x->contents) > 1; }));
+    // Pick some single-attribute subsets (by index)
     $smallClosureIdxs = array_rand($smallAttrSets, min(count($smallAttrSets), rand(2, 4)));
+    // Pick some multi-attribute subsets (by index)
     $largeClosureIdxs = ensure_array(array_rand($largeAttrSets, rand(1, 3)));
+    // Find each of those subsets
     $closureTargets = [];
     foreach ($smallClosureIdxs as $i) {
         $closureTargets[] = $smallAttrSets[$i];
@@ -58,25 +80,40 @@ if (!isset($_SESSION['rel']) || !isset($_SESSION['dec-opts']) || isset($_REQUEST
     foreach ($largeClosureIdxs as $i) {
         $closureTargets[] = $largeAttrSets[$i];
     }
+    // Sort by length, then lexicographically (apparently)
     sort($closureTargets);
+    // Those are the subsets to take the closure of
     $_SESSION['closure-targets'] = $closureTargets;
 
+    // Didn't I move this above here?
     $attrSetsCmp = function($a, $b) {
         if ($a->equals($b)) return 0;
         if ($a->containsAll($b)) return 1;
         return -1;
     };
+    // Grab the candidate keys
     $candKeys = array_values($rel->candidateKeys());
+    // Grab the superkeys
     $superkeys = array_values($rel->superkeys());
+    // Find the subsets that aren't superkeys
     $nonKeys = array_udiff($attrSets, $superkeys, $candKeys, $attrSetsCmp);
+    // Find the superkeys that aren't candidate keys
     $superkeys = array_udiff($superkeys, $candKeys, $attrSetsCmp);
+    // Find the subsets that still aren't superkeys or candidate keys (I am like 80% sure this still fixes things)
     $nonKeys = array_udiff($nonKeys, $superkeys, $candKeys, $attrSetsCmp);
+    // If everything is a candidate key or everything is a superkey...
     if (count($superkeys) == 0 || count($nonKeys) == 0) {
+        // Print a less-ugly error message to precede the uglier error message that's coming later
+        // and prompt to retry
         echo "<h1>RNG machine &#x1F171;roke</h1><form action='problems.php' method='POST'><input type='submit' name='reroll' value='Understandable have a nice day'></form>";
     }
+    // Pick one or two non-keys
     $nonKeyIdxs = ensure_array(array_rand($nonKeys, rand(1, 2)));
+    // Pick one or two superkeys
     $superkeyIdxs = ensure_array(array_rand($superkeys, min(count($superkeys), rand(1, 2))));
+    // Pick one or two candidate keys
     $candKeyIdxs = ensure_array(array_rand($candKeys, min(count($candKeys), rand(1, 2))));
+    // Grab all those
     $keyOpts = [];
     foreach ($nonKeyIdxs as $i) {
         $keyOpts[] = $nonKeys[$i];
@@ -87,55 +124,86 @@ if (!isset($_SESSION['rel']) || !isset($_SESSION['dec-opts']) || isset($_REQUEST
     foreach ($candKeyIdxs as $i) {
         $keyOpts[] = $candKeys[$i];
     }
+    // Shuffle them around a bit
     shuffle($keyOpts);
+    // Those are the attribute sets that might or might not be superkeys or candidate keys
     $_SESSION['key-opts'] = $keyOpts;
 
+    // Guarantee there will be an implication that does not hold
+    // by picking a non-key as the left hand side
     $implBadLHSIdx = array_rand($nonKeys, 1);
     $implBadLHS = $nonKeys[$implBadLHSIdx];
+    // and something that isn't a subset of its closure as the right hand side
     $implBadRHSs = array_udiff($attrSets, $rel->closure($implBadLHS)->allSubsets(), $attrSetsCmp);
     $implBadRHSIdx = array_rand($implBadRHSs, 1);
     $implBadRHS = $implBadRHSs[$implBadRHSIdx];
+    // Start out with that implication
     $implications = [[$implBadLHS, $implBadRHS]];
+    // Don't reuse that LHS
     $implNotBadLHSs = array_udiff($attrSets, [$implBadLHS], $keyOpts, $attrSetsCmp);
+    // Pick a few other LHSs
     $implLHSIdxs = array_rand($implNotBadLHSs, rand(3, 5));
+    // For each of those...
     foreach ($implLHSIdxs as $i) {
         $lhs = $implNotBadLHSs[$i];
+        // Find things it does determine
         $goodRHSs = $rel->closure($lhs)->allSubsets();
         $goodRHSs = array_values(array_filter($goodRHSs, $nonempty));
+        // Find things it doesn't determine
         $badRHSs = array_udiff($attrSets, $goodRHSs, $attrSetsCmp);
+        // If we're being nice or there aren't things it doesn't determine...
         if (rand(0, 1) == 0 || count($badRHSs) == 0) {
+            // Pick something it does determine (so the dependency should hold)
             $goodIdx = array_rand($goodRHSs, 1);
             $rhs = $goodRHSs[$goodIdx];
         } else {
+            // Pick something it doesn't determine (so the dependency shouldn't hold)
             $badIdx = array_rand($badRHSs, 1);
             $rhs = $badRHSs[$badIdx];
         }
+        // Save the implication
         $implications[] = [$lhs, $rhs];
     }
+    // Mix around the implications
     shuffle($implications);
+    // Those are the implications we should ask about
     $_SESSION['impls'] = $implications;
 
+    // The first decomposition is always the entire relation
     $decOpts = [[clone $rel]];
+    // There are a few others
     $decCount = rand(3, 4);
+    // We want to pick out some but not all of the attributes
     $decSubsets = range(1, pow(2, count($rel->attrs->contents)) - 2);
+    // Pick some alphas to split out but include
     $decAlphaSubsets = array_values(array_rand($decSubsets, $decCount));
+    // Pick some betas to split out and exclude
     $decBetaSubsets = array_values(array_rand($decSubsets, $decCount));
+    // Pick one to be evil and re-split (if it's 0, we don't re-split anything)
     $evilIdx = array_rand(range(0, $decCount - 1));
+    // Shuffle around the alphas
     shuffle($decAlphaSubsets);
+    // Shuffle around the betas
     shuffle($decBetaSubsets);
+    // For every decomposition that isn't the entire relation...
     for ($i = 1; $i < $decCount; $i++) {
         $alpha = $rel->attrs->getSubset($decSubsets[$decAlphaSubsets[$i]]);
         $beta = $rel->attrs->getSubset($decSubsets[$decBetaSubsets[$i]]);
+        // Fracture the relation with those sets
         $decOpts[$i] = $rel->fracture($alpha, $beta);
+        // If we're being evil...
         if ($i == $evilIdx) {
+            // Pick one of the subrelations to refracture
             $refracIdx = array_rand($decOpts[$i], 1);
             $refrac = $decOpts[$i][$refracIdx];
+            // Refracture it the same way we fractured the original relation
             $refSubsets = range(1, pow(2, count($refrac->attrs->contents)) - 2);
             $refAlphaIdx = array_rand($refSubsets, 1);
             $refBetaIdx = array_rand($refSubsets, 1);
             $alpha = $refrac->attrs->getSubset($refSubsets[$refAlphaIdx]);
             $beta = $refrac->attrs->getSubset($refSubsets[$refBetaIdx]);
             $refd = $refrac->fracture($alpha, $beta);
+            // Replace the original subrelation with its fractured version
             unset($decOpts[$i][$refracIdx]);
             $decOpts[$i] = array_values($decOpts[$i]);
             $decOpts[$i][] = $refd[0];
@@ -144,24 +212,33 @@ if (!isset($_SESSION['rel']) || !isset($_SESSION['dec-opts']) || isset($_REQUEST
         sort($decOpts[$i]);
     }
     $nice = rand(0, 1) == 1;
+    // If we want to be nice, and the relation isn't BCNF already...
     if ($nice && !$rel->isBCNF()) {
+        // If we want to give BCNF or it's already 3NF...
         if (rand(0, 1) == 1 || $rel->is3NF()) {
+            // Throw in the BCNF decomposition too
             $decOpts[] = $rel->decomposeBCNF();
         } else {
+            // Throw in the 3NF decomposition too
             $decOpts[] = $rel->decompose3NF();
         }
     }
+    // Purge any duplicate decompositions we accidentally generated
     $decOpts = array_values(array_unique($decOpts, SORT_REGULAR));
     shuffle($decOpts);
+    // Those are the decompositions we should be evaluating
     $_SESSION['dec-opts'] = $decOpts;
 }
 
+// Grab the relation
 $rel = $_SESSION['rel'];
 
+// Usually we aren't grading
 $grading = false;
-$triviaSubAnswer = [];
+// If we're grading...
 if (isset($_REQUEST['grade'])) {
     $grading = true;
+    // Check whether to show the answer or a hint
     $show_answer = $_REQUEST['grade'] == 'Reveal Correct Answers';
     $show_hint = $_REQUEST['grade'] == 'Show Hints';
 
