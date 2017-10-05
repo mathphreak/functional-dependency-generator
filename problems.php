@@ -384,5 +384,6 @@ $rel->debug();
 <form action='problems.php' method='POST'>
     <input type="submit" name="reroll" value="Generate New Questions">
 </form>
+<p>Curious? Bored? Check out <a href="https://github.com/mathphreak/functional-dependency-generator">the source for this problem generator</a>.</p>
 </body>
 </html>
