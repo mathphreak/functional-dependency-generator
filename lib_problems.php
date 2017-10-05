@@ -242,6 +242,7 @@ if (isset($_REQUEST['grade'])) {
     $show_answer = $_REQUEST['grade'] == 'Reveal Correct Answers';
     $show_hint = $_REQUEST['grade'] == 'Show Hints';
 
+    // Grab the closure targets
     $closureTargets = $_SESSION['closure-targets'];
     $closureSubAnswers = [];
     $closureCorrAnswers = [];
@@ -249,22 +250,30 @@ if (isset($_REQUEST['grade'])) {
     $closureCorrect = [];
     $closurePtsEarned = 0;
     $closurePtsPossible = 0;
+    // For every closure that we asked for...
     for ($i = 0; $i < count($closureTargets); $i++) {
+        // Find what the user put
         $closureSubAnswers[$i] = AttributeSet::from($_REQUEST['q-closures-c' . $i]);
+        // Find the actual closure
         $closureCorrAnswers[$i] = $rel->closure($closureTargets[$i]);
+        // Check if they match
         $closureCorrect[$i] = $closureSubAnswers[$i]->equals($closureCorrAnswers[$i]);
         $closurePtsPossible++;
         if ($closureCorrect[$i]) {
             $closurePtsEarned++;
             $closureHints[$i] = '';
         } else if ($closureSubAnswers[$i]->containsAll($closureCorrAnswers[$i])) {
+            // If they submitted all the right things and also some other stuff, say something to that effect
             $closureHints[$i] = "Not all of these are right";
         } else {
+            // If not, they're missing some of the right things
             $closureHints[$i] = "You're missing something";
         }
     }
 
+    // Grab the key options
     $keyOpts = $_SESSION['key-opts'];
+    // Grab the superkeys and candidate keys
     $superkeys = $rel->superkeys();
     $candKeys = $rel->candidateKeys();
     $keySubAnswers = [];
@@ -273,14 +282,18 @@ if (isset($_REQUEST['grade'])) {
     $keyCorrect = [];
     $keyPtsEarned = 0;
     $keyPtsPossible = 0;
+    // For all the keys we asked about...
     for ($i = 0; $i < count($keyOpts); $i++) {
         $opt = $keyOpts[$i];
+        // Find what the user said
         $subSK = isset($_REQUEST['q-skck-k' . $i . 'sk']);
         $subCK = isset($_REQUEST['q-skck-k' . $i . 'ck']);
+        // Find what the correct answer was
         $corrSK = in_array($opt, $superkeys);
         $corrCK = in_array($opt, $candKeys);
         $keySubAnswers[$i] = [$subSK, $subCK];
         $keyCorrAnswers[$i] = [in_array($opt, $superkeys), in_array($opt, $candKeys)];
+        // Check if they match
         $keyCorrect[$i] = $keySubAnswers[$i] == $keyCorrAnswers[$i];
         $keyPtsPossible++;
         if ($keyCorrect[$i]) {
@@ -289,13 +302,17 @@ if (isset($_REQUEST['grade'])) {
             $keyHints[$i] = '';
         } else if ($corrSK != $subSK) {
             // (cSK, ?cCK, !sSK, ?sCK), (!cSK, !cCK, sSK, ?sCK)
+            // Either it isn't a superkey but they said it was, or it is but they said it wasn't
             $keyHints[$i] = 'Think about \(' . $opt . '^+\)';
         } else if ($subCK && !$subSK) {
             // (!cSK, !cCK, !sSK, sCK);
+            // They said it was a candidate key but not a superkey, which is weird
             $keyHints[$i] = 'What is the definition of a candidate key?';
         } else if ($subCK && !$corrCK) {
             // (cSK, !cCK, sSK, sCK)
+            // They said it was a candidate key but it was just a superkey
             $keyHints[$i] = 'wait how is this not a candidate key - yell at matt plz';
+            // Find the candidate key that this superkey is a superset of
             foreach ($candKeys as $realCK) {
                 if ($opt->containsAll($realCK) && !$realCK->containsAll($opt)) {
                     $keyHints[$i] = 'Think about \(' . $realCK . '^+\)';
@@ -303,10 +320,12 @@ if (isset($_REQUEST['grade'])) {
             }
         } else {
             // (cSK, cCK, sSK, !sCK)
+            // They said it wasn't a candidate key but it was
             $keyHints[$i] = "Think about the subsets of " . $opt;
         }
     }
 
+    // Find the candidate keys the user gave
     $ckSubAnswerRaw = $_REQUEST['q-ck'];
     $ckSubAnswer = explode(',', $ckSubAnswerRaw);
     $ckSubAnswer = array_map(function ($x) {
@@ -315,10 +334,12 @@ if (isset($_REQUEST['grade'])) {
         return $result;
     }, $ckSubAnswer);
     sort($ckSubAnswer);
+    // Find the candidate keys that are right
     $ckCorrAnswer = $candKeys;
     sort($ckCorrAnswer);
     $ckCorrAnswerRaw = array_map(function ($x) { return implode('', $x->contents); }, $ckCorrAnswer);
     $ckCorrAnswerRaw = implode(', ', $ckCorrAnswerRaw);
+    // Check if they match
     $ckCorrect = $ckSubAnswer == $ckCorrAnswer;
     $ckPtsEarned = 0 + $ckCorrect;
     $ckPtsPossible = 1;
@@ -329,17 +350,23 @@ if (isset($_REQUEST['grade'])) {
     } else if (count($ckSubAnswer) > count($ckCorrAnswer)) {
         $ckHint = "You've got too many keys";
     } else {
+        // Try to align what they put with what is right
         $ckSubAnswer = levAlign($ckCorrAnswer, $ckSubAnswer);
+        // For each pair...
         for ($i = 0; $i < count($ckCorrAnswer); $i++) {
             if (!$ckSubAnswer[$i]->containsAll($ckCorrAnswer[$i])) {
+                // If they missed a spot, nudge them about it
                 $ckHint = 'Think about \(' . $ckSubAnswer[$i] . '^+\)';
             } else if (!$ckCorrAnswer[$i]->containsAll($ckSubAnswer[$i])) {
+                // If they havde too much, ask why
                 $ckHint = 'Something is redundant';
             }
         }
+        // Disclaim everything in this case since levAlign() isn't perfect or clairvoyant
         $ckHint = $ckHint . ' (unless I screwed up)';
     }
 
+    // Grab the dependencies we asked about that may or may not be implied by R
     $impls = $_SESSION['impls'];
     $implSubAnswers = [];
     $implCorrAnswers = [];
@@ -347,19 +374,25 @@ if (isset($_REQUEST['grade'])) {
     $implHint = [];
     $implPtsEarned = 0;
     $implPtsPossible = 0;
+    // For each potential dependency...
     for ($i = 0; $i < count($impls); $i++) {
         list($lhs, $rhs) = $impls[$i];
+        // If the user said something...
         if (isset($_REQUEST['q-impl-' . $i])) {
+            // Remember what they said
             $implSubAnswers[$i] = $_REQUEST['q-impl-' . $i];
         } else {
             $implSubAnswers[$i] = '';
         }
+        // Find the closure of the left-hand side
         $lhsClosure = $rel->closure($lhs);
+        // The dependency should be true if the closure of the LHS contains the RHS
         if ($lhsClosure->containsAll($rhs)) {
             $implCorrAnswers[$i] = 'yes';
         } else {
             $implCorrAnswers[$i] = 'no';
         }
+        // Check if the user was right
         $implCorrect[$i] = $implSubAnswers[$i] == $implCorrAnswers[$i];
         $implPtsPossible++;
         if ($implCorrect[$i]) {
@@ -368,12 +401,15 @@ if (isset($_REQUEST['grade'])) {
         } else if ($implSubAnswers[$i] == '') {
             $implHint[$i] = 'It helps if you pick an answer';
         } else if ($lhs->containsAll($rhs)) {
+            // If it's trivial, point that out
             $implHint[$i] = 'Think about reflexivity';
         } else {
+            // It's a yes or no question, saying "you're wrong" is already a pretty big hint
             $implHint[$i] = 'Think about \(' . $lhs . '^+\)';
         }
     }
 
+    // Grab the canonical cover the user submitted
     $ccSubAnswerRaw = $_REQUEST['q-cc'];
     $ccSubAnswerHalfRaw = explode(',', $ccSubAnswerRaw);
     $ccSubAnswerHalfRaw = array_map('trim', $ccSubAnswerHalfRaw);
@@ -390,6 +426,7 @@ if (isset($_REQUEST['grade'])) {
         $ccSubAnswer = [];
     }
     sort($ccSubAnswer);
+    // Find the actual canonical cover
     $ccCorrAnswer = $rel->canonicalCover(false);
     sort($ccCorrAnswer);
     $ccCorrAnswerHalfRaw = array_map(function ($x) {
@@ -397,31 +434,42 @@ if (isset($_REQUEST['grade'])) {
         return $lhs . '->' . $rhs;
     }, $ccCorrAnswer);
     $ccCorrAnswerRaw = implode(', ', $ccCorrAnswerHalfRaw);
+    // Check if they match
     $ccCorrect = $ccSubAnswer == $ccCorrAnswer;
     $ccPtsEarned = 0 + $ccCorrect;
     $ccPtsPossible = 1;
     if ($ccCorrect) {
         $ccHint = '';
     } else if (count($ccSubAnswer) < count($ccCorrAnswer)) {
+        // If they're missing a dependency, say so
         $ccHint = "You've taken out too much";
     } else if (count($ccSubAnswer) > count($ccCorrAnswer)) {
+        // If they have too many dependencies, say so
         $ccHint = "You can eliminate more";
     } else {
+        // Align the dependencies, hopefully
         $ccSubAnswerHalfRaw = levAlign($ccCorrAnswerHalfRaw, $ccSubAnswerHalfRaw);
+        // For each dependency...
         for ($i = 0; $i < count($ccCorrAnswerHalfRaw); $i++) {
             $corr = $ccCorrAnswerHalfRaw[$i];
             $sub = $ccSubAnswerHalfRaw[$i];
             list($subLHS, $subRHS) = explode('->', $sub);
             if (strlen($sub) > strlen($corr)) {
+                // If the submitted dependency has too much, say so
                 $ccHint = "Something's (probably) redundant in \\(" . $subLHS . '\rightarrow ' . $subRHS . "\)";
             } else if (strlen($sub) < strlen($corr)) {
+                // If the submitted dependency has too little, say so
                 $ccHint = "Something (probably) wasn't redundant in \(" . $subLHS . '\rightarrow ' . $subRHS . "\)";
             } else if ($sub != $corr) {
-                $ccHint = "Something's fishy with \(" . $subLHS . '\rightarrow ' . $subRHS . "\)";
+                // Just give a general hint as to where an issue might be
+                $ccHint = "Something's (probably) fishy with \(" . $subLHS . '\rightarrow ' . $subRHS . "\)";
             }
         }
+        // Disclaim again
+        $ccHint .= ' (unless your issue is somewhere else instead)';
     }
 
+    // Find the decompositions we asked about
     $decOpts = $_SESSION['dec-opts'];
     $decSubAnswers = [];
     $decCorrAnswers = [];
@@ -429,16 +477,20 @@ if (isset($_REQUEST['grade'])) {
     $decHint = [];
     $decPtsPossible = count($decOpts) * 2;
     $decPtsEarned = 0;
+    // For each of them...
     for ($i = 0; $i < count($decOpts); $i++) {
         $dec = $decOpts[$i];
+        // Grab the highest normal form the user gave
         if (isset($_REQUEST['dec-' . $i . '-hnf'])) {
             $subHNF = (float) $_REQUEST['dec-' . $i . '-hnf'];
         } else {
             $subHNF = '';
         }
+        // Check the user's answers for LJ and DP
         $subLJ = isset($_REQUEST['dec-' . $i . '-lj']);
         $subDP = isset($_REQUEST['dec-' . $i . '-dp']);
         $decSubAnswers[$i] = [$subHNF, $subLJ, $subDP];
+        // Find if the decomposition is actually BC and 3
         $allBCNF = true;
         $all3NF = true;
         foreach ($dec as $d) {
@@ -459,17 +511,21 @@ if (isset($_REQUEST['grade'])) {
             $corrHNF = 1;
             $corrHNFRaw = '1NF';
         }
+        // Find if the decomposition is actually DP or LJ
         $corrDP = $rel->isDepPres($dec);
         $corrLJ = $rel->isLossless($dec);
         $decCorrAnswers[$i] = [$corrHNFRaw, $corrLJ, $corrDP];
+        // Check if highest normal form matches
         $decCorrect[$i] = [false, false];
         if ($corrHNF == $subHNF) {
             $decPtsEarned++;
             $decCorrect[$i][0] = true;
             $decHNFHint = '';
         } else if ($subHNF == '') {
+            // Demand an answer
             $decHNFHint = 'It helps if you pick an answer';
         } else if ($corrHNF < $subHNF) {
+            // If overestimated, prompt to reconsider
             $decHNFHint = 'Is this really in ';
             if ($subHNF == 3.5) {
                 $decHNFHint .= 'BC';
@@ -478,6 +534,7 @@ if (isset($_REQUEST['grade'])) {
             }
             $decHNFHint .= 'NF?';
         } else if ($corrHNF > $subHNF) {
+            // If underestimated, prompt to reconsider
             $decHNFHint = 'Is this also in ';
             if ($subHNF == 1) {
                 $decHNFHint .= '3';
@@ -490,6 +547,7 @@ if (isset($_REQUEST['grade'])) {
             }
             $decHNFHint .= 'NF?';
         }
+        // Check if DP/LJ match
         $decOtherHint = '';
         if ($corrDP == $subDP && $corrLJ == $subLJ) {
             $decPtsEarned++;
@@ -505,6 +563,7 @@ if (isset($_REQUEST['grade'])) {
         $decHint[$i] = [$decHNFHint, $decOtherHint];
     }
 
+    // Find the submitted 3NF decomposition
     $tnfSubAnswerRaw = $_REQUEST['q-3nf'];
     $tnfSubAnswer = explode(',', $tnfSubAnswerRaw);
     $tnfSubAnswer = array_map(function ($x) {
@@ -513,6 +572,7 @@ if (isset($_REQUEST['grade'])) {
         return $result;
     }, $tnfSubAnswer);
     sort($tnfSubAnswer);
+    // Find the correct 3NF decomposition
     $tnfCorrAnswer = $rel->decompose3NF();
     $tnfCorrAnswer = array_map(function($x) {
         return $x->attrs;
@@ -522,6 +582,7 @@ if (isset($_REQUEST['grade'])) {
         return implode('', $x->contents);
     }, $tnfCorrAnswer);
     $tnfCorrAnswerRaw = implode(', ', $tnfCorrAnswerRaw);
+    // Check if they match
     $tnfCorrect = $tnfSubAnswer == $tnfCorrAnswer;
     $tnfPtsEarned = 0 + $tnfCorrect;
     $tnfPtsPossible = 1;
@@ -535,6 +596,7 @@ if (isset($_REQUEST['grade'])) {
         $tnfHint = "You've got the right number of relations, they're just wrong";
     }
 
+    // Find the submitted BCNF decomposition
     $bcnfSubAnswerRaw = $_REQUEST['q-bcnf'];
     $bcnfSubAnswer = explode(',', $bcnfSubAnswerRaw);
     $bcnfSubAnswer = array_map(function ($x) {
@@ -543,7 +605,8 @@ if (isset($_REQUEST['grade'])) {
         return $result;
     }, $bcnfSubAnswer);
     sort($bcnfSubAnswer);
-    $bcnfCorrAnswer = $rel->decompose3NF();
+    // Find the actual BCNF decomposition
+    $bcnfCorrAnswer = $rel->decomposeBCNF();
     $bcnfCorrAnswer = array_map(function($x) {
         return $x->attrs;
     }, $bcnfCorrAnswer);
@@ -552,6 +615,7 @@ if (isset($_REQUEST['grade'])) {
         return implode('', $x->contents);
     }, $bcnfCorrAnswer);
     $bcnfCorrAnswerRaw = implode(', ', $bcnfCorrAnswerRaw);
+    // Check if they match
     $bcnfCorrect = $bcnfSubAnswer == $bcnfCorrAnswer;
     $bcnfPtsEarned = 0 + $bcnfCorrect;
     $bcnfPtsPossible = 1;
@@ -581,6 +645,9 @@ if (isset($_REQUEST['grade'])) {
     $ptsEarned = $closurePtsEarned + $keyPtsEarned + $ckPtsEarned + $implPtsEarned + $ccPtsEarned + $decPtsEarned+ $tnfPtsEarned + $bcnfPtsEarned;
 }
 
+// This generates the email body for the link to yell at me when things don't work.
+// It probably should handle serialization itself rather than deferring to JSON,
+// but I already did it this way and I'm lazy.
 function dumpEverything() {
     $result = "DESCRIBE YOUR ISSUE HERE PLEASE" . PHP_EOL . PHP_EOL . PHP_EOL . 'Context: ';
     $stringify = function ($x) {
