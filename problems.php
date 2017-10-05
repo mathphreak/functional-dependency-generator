@@ -374,6 +374,9 @@ require_once('lib_problems.php');
     <input type='submit' name='grade' value='Check Answers & Reveal Correct Answers'>
 </form>
 <div class="secret">
+<!-- If I had control of the hosting, I could do all sorts of logging.
+Since I don't, I'm leaving debug code in production.
+Deal with it. -->
 <?php
 $rel->debug();
 ?>
