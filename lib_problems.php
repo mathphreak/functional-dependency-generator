@@ -239,8 +239,8 @@ $grading = false;
 if (isset($_REQUEST['grade'])) {
     $grading = true;
     // Check whether to show the answer or a hint
-    $show_answer = $_REQUEST['grade'] == 'Reveal Correct Answers';
-    $show_hint = $_REQUEST['grade'] == 'Show Hints';
+    $show_answer = $_REQUEST['grade'] == 'Check Answers & Reveal Correct Answers';
+    $show_hint = $_REQUEST['grade'] == 'Check Answers & Show Hints';
 
     // Grab the closure targets
     $closureTargets = $_SESSION['closure-targets'];
