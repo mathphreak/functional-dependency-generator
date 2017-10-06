@@ -185,12 +185,14 @@ if (!isset($_SESSION['rel']) || !isset($_SESSION['dec-opts']) || isset($_REQUEST
     shuffle($decAlphaSubsets);
     // Shuffle around the betas
     shuffle($decBetaSubsets);
+    // Grab the closures of everything
+    $allClosures = $rel->allClosures();
     // For every decomposition that isn't the entire relation...
     for ($i = 1; $i < $decCount; $i++) {
         $alpha = $rel->attrs->getSubset($decSubsets[$decAlphaSubsets[$i]]);
         $beta = $rel->attrs->getSubset($decSubsets[$decBetaSubsets[$i]]);
         // Fracture the relation with those sets
-        $decOpts[$i] = $rel->fracture($alpha, $beta);
+        $decOpts[$i] = $rel->fracture($alpha, $beta, $allClosures);
         // If we're being evil...
         if ($i == $evilIdx) {
             // Pick one of the subrelations to refracture
@@ -202,7 +204,7 @@ if (!isset($_SESSION['rel']) || !isset($_SESSION['dec-opts']) || isset($_REQUEST
             $refBetaIdx = array_rand($refSubsets, 1);
             $alpha = $refrac->attrs->getSubset($refSubsets[$refAlphaIdx]);
             $beta = $refrac->attrs->getSubset($refSubsets[$refBetaIdx]);
-            $refd = $refrac->fracture($alpha, $beta);
+            $refd = $refrac->fracture($alpha, $beta, $allClosures);
             // Replace the original subrelation with its fractured version
             unset($decOpts[$i][$refracIdx]);
             $decOpts[$i] = array_values($decOpts[$i]);
@@ -490,10 +492,18 @@ if (isset($_REQUEST['grade'])) {
         $subLJ = isset($_REQUEST['dec-' . $i . '-lj']);
         $subDP = isset($_REQUEST['dec-' . $i . '-dp']);
         $decSubAnswers[$i] = [$subHNF, $subLJ, $subDP];
-        // Find if the decomposition is actually BC and 3
+        // Find the highest normal form of the decomposition
+        $all5NF = true;
+        $all4NF = true;
         $allBCNF = true;
         $all3NF = true;
         foreach ($dec as $d) {
+            if (!$d->is5NF()) {
+                $all5NF = false;
+            }
+            if (!$d->is4NF()) {
+                $all4NF = false;
+            }
             if (!$d->isBCNF()) {
                 $allBCNF = false;
             }
@@ -501,7 +511,13 @@ if (isset($_REQUEST['grade'])) {
                 $all3NF = false;
             }
         }
-        if ($allBCNF) {
+        if ($all5NF) {
+            $corrHNF = 5;
+            $corrHNFRaw = '5NF';
+        } else if ($all4NF) {
+            $corrHNF = 4;
+            $corrHNFRaw = '4NF';
+        } else if ($allBCNF) {
             $corrHNF = 3.5;
             $corrHNFRaw = 'BCNF';
         } else if ($all3NF) {
@@ -556,7 +572,7 @@ if (isset($_REQUEST['grade'])) {
             if ($corrDP != $subDP) {
                 $decOtherHint = 'Is this dependency-preserving?';
             }
-            if ($corrLJ == $subLJ) {
+            if ($corrLJ != $subLJ) {
                 $decOtherHint .= ' Is this lossless?';
             }
         }
