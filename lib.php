@@ -178,8 +178,7 @@ class Relation {
     }
 
     // Render an individual dependency, optionally in TeX
-    function renderDep($i, $tex = false) {
-        $dep = $this->deps[$i];
+    function renderDep($dep, $tex = false) {
         $dep[0]->renderList();
         if ($tex) {
             echo '\\rightarrow ';
@@ -196,7 +195,7 @@ class Relation {
         }
         echo '{';
         for ($i = 0; $i < count($this->deps); $i++) {
-            $this->renderDep($i, $tex);
+            $this->renderDep($this->deps[$i], $tex);
             if ($i < count($this->deps) - 1) {
                 echo ', ';
             }
@@ -384,7 +383,7 @@ class Relation {
     }
 
     // Check if this relation is in BCNF
-    function isBCNF() {
+    function isBCNF($verbose = false) {
         // Grab the superkeys
         $keys = $this->superkeys();
         // For each dependency...
@@ -399,6 +398,10 @@ class Relation {
                 continue;
             } else {
                 // If neither of those holds, this is not BCNF
+                if ($verbose) {
+                    $this->renderDep($dep);
+                    echo ' is bad so ';
+                }
                 return false;
             }
         }
@@ -406,7 +409,7 @@ class Relation {
     }
 
     // Check if this relation is in 3NF
-    function is3NF() {
+    function is3NF($verbose = false) {
         // Grab the superkeys
         $superkeys = $this->superkeys();
         // Grab the candidate keys
@@ -433,6 +436,10 @@ class Relation {
                 // If some attr in RHS is neither...
                 if (!$goodRHS->containsAll($rhs)) {
                     // this is not 3NF
+                    if ($verbose) {
+                        $this->renderDep($dep);
+                        echo ' is bad so ';
+                    }
                     return false;
                 }
             }
@@ -455,7 +462,7 @@ class Relation {
 
     // Decompose this relation into BCNF
     // Algorithm from Silberschatz, Korth, Sudarshan "Database System Concepts" 6th ed. fig. 8.11
-    function decomposeBCNF() {
+    function decomposeBCNF($verbose = false) {
         // Start with only R
         $result = [$this];
         $done = false;
@@ -470,6 +477,10 @@ class Relation {
                 // If it's not in BCNF...
                 if (!$ri->isBCNF()) {
                     $done = false;
+                    if ($verbose) {
+                        $ri->render();
+                        echo ' is not BCNF.<br>';
+                    }
                     // Find some a->b where a is not a superkey of ri and a and b share nothing
                     $riSuperkeys = $ri->superkeys();
                     $riSubsets = $ri->attrs->allSubsets();
@@ -498,7 +509,7 @@ class Relation {
 
     // Decompose this relation into 3NF
     // Algorithm from Silberschatz, Korth, Sudarshan "Database System Concepts" 6th ed. fig. 8.12
-    function decompose3NF() {
+    function decompose3NF($verbose = false) {
         // Grab the canonical cover
         $fc = $this->canonicalCover(false);
         $i = 0;
@@ -533,6 +544,13 @@ class Relation {
             // Throw one in
             $result[$i] = new Relation($candKeys[0], $fc, false);
             $i++;
+        }
+        if ($verbose) {
+            foreach (array_keys($result) as $i) {
+                echo 'R<sub>' . ($i + 1) . '</sub>: ';
+                $result[$i]->render();
+                echo '<br>';
+            }
         }
         $resCount = $i;
         // For every relation in the result...
@@ -668,13 +686,13 @@ class Relation {
             echo '<br>';
         }
         echo '<br>BCNF: ';
-        if ($this->isBCNF()) {
+        if ($this->isBCNF(true)) {
             echo 'yes';
         } else {
             echo 'no';
         }
         echo '<br>3NF: ';
-        if ($this->is3NF()) {
+        if ($this->is3NF(true)) {
             echo 'yes';
         } else {
             echo 'no';
@@ -683,7 +701,7 @@ class Relation {
         echo '<br>';
 
         echo '<br>BCNF Decomposition: ';
-        $bcnf = $this->decomposeBCNF();
+        $bcnf = $this->decomposeBCNF(true);
         foreach ($bcnf as $ri) {
             $ri->attrs->renderTuple();
             echo ' ';
@@ -694,7 +712,7 @@ class Relation {
         echo 'Dependency Preserving';
 
         echo '<br>3NF Decomposition: ';
-        foreach ($this->decompose3NF() as $ri) {
+        foreach ($this->decompose3NF(true) as $ri) {
             $ri->attrs->renderTuple();
             echo ' ';
         }
