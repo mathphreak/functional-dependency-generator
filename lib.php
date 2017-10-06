@@ -54,13 +54,19 @@ class AttributeSet {
     }
 
     // Render the attribute set as a set {A, B, C}.
-    function renderSet() {
+    function renderSet($tex = false) {
+        if ($tex) {
+            echo '\\';
+        }
         echo '{';
         for ($i = 0; $i < count($this->contents); $i++) {
             $this->renderAttr($i);
             if ($i < count($this->contents) - 1) {
                 echo ', ';
             }
+        }
+        if ($tex) {
+            echo '\\';
         }
         echo '}';
     }
