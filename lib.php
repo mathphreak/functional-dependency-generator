@@ -296,8 +296,9 @@ class Relation {
         // While we just changed something and haven't been running for too long...
         while ($shrunk && $iters < 1000) {
             if ($verbose) {
-                (new Relation($this->attrs, $deps))->renderDeps();
-                echo '<br>';
+                echo '\(F_c\approx';
+                (new Relation($this->attrs, $deps))->renderDeps(true);
+                echo '\)<br>';
             }
             $shrunk = false;
             // Map LHS => index of first dependency with given LHS
@@ -323,7 +324,7 @@ class Relation {
                 if ($removing) {
                     $shrunk = true;
                     if ($verbose) {
-                        echo 'Removed ' . $dep[0] . '&rarr;' . $dep[1] . ' entirely.<br>';
+                        echo 'Removed \(' . $dep[0] . '\rightarrow ' . $dep[1] . '\) entirely.<br>';
                     }
                     unset($deps[$i]);
                     $deps = array_values($deps);
@@ -353,7 +354,9 @@ class Relation {
                         // If we didn't create or remove any information...
                         if (closuresEqual($closures, $newClosures)) {
                             if ($verbose) {
-                                echo 'Removed ' . $removed . ' to get ' . $newDeps[$i][0] . '&rarr;' . $newDeps[$i][1] . '<br>';
+                                echo 'Removed \(' . $removed;
+                                echo '\) from \(' . $deps[$i][0] . '\rightarrow ' . $deps[$i][1];
+                                echo '\) to get \(' . $newDeps[$i][0] . '\rightarrow ' . $newDeps[$i][1] . '\)<br>';
                             }
                             // Remove that attribute
                             $deps = $newDeps;
@@ -399,8 +402,9 @@ class Relation {
             } else {
                 // If neither of those holds, this is not BCNF
                 if ($verbose) {
-                    $this->renderDep($dep);
-                    echo ' is bad so ';
+                    echo '\(';
+                    $this->renderDep($dep, true);
+                    echo '\) is bad so ';
                 }
                 return false;
             }
@@ -437,8 +441,9 @@ class Relation {
                 if (!$goodRHS->containsAll($rhs)) {
                     // this is not 3NF
                     if ($verbose) {
-                        $this->renderDep($dep);
-                        echo ' is bad so ';
+                        echo '\(';
+                        $this->renderDep($dep, true);
+                        echo '\) is bad so ';
                     }
                     return false;
                 }
@@ -447,17 +452,95 @@ class Relation {
         return true;
     }
 
-    // Make [R-$beta, $alpha$beta] from this relation R and an $alpha and $beta
-    function fracture($alpha, $beta) {
+    // Check if this relation is in 4NF
+    function is4NF($verbose = false) {
+        // Check if it's in BCNF first
+        if (!$this->isBCNF($verbose)) {
+            if ($verbose) {
+                echo 'not in BCNF so ';
+            }
+            return false;
+        }
+        if ($verbose) {
+            echo 'in BCNF ';
+        }
+        // Look for a simple key
+        foreach ($this->candidateKeys() as $key) {
+            if (count($key->contents) == 1) {
+                if ($verbose) {
+                    echo 'and \(' . $key . '\) is a simple key so ';
+                }
+                return true;
+            }
+        }
+        if ($verbose) {
+            echo 'but no simple key so ';
+        }
+        return false;
+    }
+
+    // Check if this relation is in 5NF
+    function is5NF($verbose = false) {
+        // Check if it's in 3NF first
+        if (!$this->is3NF($verbose)) {
+            if ($verbose) {
+                echo 'not in 3NF so ';
+            }
+            return false;
+        }
+        if ($verbose) {
+            echo 'in 3NF ';
+        }
+        // Check that all candidate keys are simple
+        foreach ($this->candidateKeys() as $key) {
+            if (count($key->contents) > 1) {
+                if ($verbose) {
+                    echo 'but \(' . $key . '\) is a non-simple candidate key so ';
+                }
+                return false;
+            }
+        }
+        if ($verbose) {
+            echo 'and all candidate keys are simple so ';
+        }
+        return true;
+    }
+
+    // Make [R-$beta, $alpha$beta] from this relation R and an $alpha and $beta, given all the closures
+    function fracture($alpha, $beta, $closures) {
         // make a new Relation with only those attributes
         $ab = clone $alpha;
         $ab->addAll($beta);
-        $other = new Relation($ab, $this->deps, false);
+        // find out the dependencies that matter
+        $otherDeps = [];
+        foreach ($ab->allSubsets() as $sub) {
+            if (count($sub->contents) > 0) {
+                $rhs = $this->closure($sub);
+                if (!$sub->containsAll($rhs)) {
+                    $rhs = new AttributeSet(array_diff($rhs->contents, $sub->contents));
+                    $otherDeps[] = [$sub, $rhs];
+                }
+            }
+        }
+        $other = new Relation($ab, $otherDeps, false);
+        $other->deps = $other->canonicalCover(false);
         // make a new Relation without beta
         $mine = new AttributeSet(array_diff($this->attrs->contents, $beta->contents));
-        $me = new Relation($mine, $this->deps, false);
+        // find its dependencies too
+        $myDeps = [];
+        foreach ($mine->allSubsets() as $sub) {
+            if (count($sub->contents) > 0) {
+                $rhs = $this->closure($sub);
+                if (!$sub->containsAll($rhs)) {
+                    $rhs = new AttributeSet(array_diff($rhs->contents, $sub->contents));
+                    $myDeps[] = [$sub, $rhs];
+                }
+            }
+        }
+        $me = new Relation($mine, $myDeps, false);
+        $me->deps = $me->canonicalCover(false);
         // give both back
-        return [$me, $other];
+        return [$other, $me];
     }
 
     // Decompose this relation into BCNF
@@ -470,16 +553,24 @@ class Relation {
         $allClosures = $this->allClosures();
         // Until we're done...
         while (!$done) {
+            if ($verbose) {
+                echo '\(R\approx ';
+                foreach ($result as $ri) {
+                    $ri->attrs->renderTuple();
+                }
+                echo '\) but ';
+            }
             $done = true;
             // For each relation in the result...
             for ($i = 0; $i < count($result); $i++) {
                 $ri = $result[$i];
                 // If it's not in BCNF...
-                if (!$ri->isBCNF()) {
+                if (!$ri->isBCNF($verbose)) {
                     $done = false;
                     if ($verbose) {
-                        $ri->render();
-                        echo ' is not BCNF.<br>';
+                        echo '\(';
+                        $ri->attrs->renderTuple();
+                        echo '\) is not BCNF.<br>';
                     }
                     // Find some a->b where a is not a superkey of ri and a and b share nothing
                     $riSuperkeys = $ri->superkeys();
@@ -495,13 +586,16 @@ class Relation {
                     $beta = $ri->closure($alpha);
                     $beta = new AttributeSet(array_diff($beta->contents, $alpha->contents));
                     // Break up $ri into [$ri-$beta, $alpha$beta]
-                    $newBits = $ri->fracture($alpha, $beta);
+                    $newBits = $ri->fracture($alpha, $beta, $allClosures);
                     // Replace $ri with those fragments in the result
                     array_splice($result, $i, 1, $newBits);
                     // Don't keep looking through the result
                     break;
                 }
             }
+        }
+        if ($verbose) {
+            echo "that's in BCNF so we're done<br>";
         }
         sort($result);
         return $result;
@@ -546,11 +640,11 @@ class Relation {
             $i++;
         }
         if ($verbose) {
-            foreach (array_keys($result) as $i) {
-                echo 'R<sub>' . ($i + 1) . '</sub>: ';
-                $result[$i]->render();
-                echo '<br>';
+            echo '\(R\approx ';
+            foreach ($result as $ri) {
+                $ri->attrs->renderTuple();
             }
+            echo '\)<br>';
         }
         $resCount = $i;
         // For every relation in the result...
@@ -658,41 +752,58 @@ class Relation {
 
     // Print out a whole bunch of stuff
     function debug() {
-        $this->render();
-        echo '<br><br>';
-        echo 'Closure of A is ';
-        $this->closure(AttributeSet::from('A'))->renderSet();
-        echo '<br><br>';
+        echo '\(R=';
+        $this->attrs->renderTuple();
+        echo '\), \(\mathcal{F}=';
+        $this->renderDeps(true);
+        echo '\)<br><br>';
         echo 'Superkeys:<ul>';
         $superkeys = $this->superkeys();
         foreach ($superkeys as $sk) {
-            echo '<li>' . $sk . '</li>';
+            echo '<li>\(' . $sk . '\)</li>';
         }
         echo '</ul>Candidate Keys:<ul>';
         $candKeys = $this->candidateKeys();
         foreach ($candKeys as $ck) {
-            echo '<li>' . $ck . '</li>';
+            echo '<li>\(' . $ck . '\)</li>';
         }
         echo '</ul>';
         $cc = $this->canonicalCover();
         $rel2 = new Relation($this->attrs, $cc);
-        echo 'Canonical cover is ';
-        $rel2->renderDeps();
-        echo '<br><br>';
+        echo '\(F_c=';
+        $rel2->renderDeps(true);
+        echo '\)<br><br>';
         $closures = $this->allClosures();
-        foreach (array_keys($closures) as $k) {
-            echo $k . '<sup>+</sup> = ';
-            $closures[$k]->renderSet();
-            echo '<br>';
+        $subsets = array_keys($closures);
+        sort($subsets);
+        usort($subsets, function ($a, $b) { return strlen($a) - strlen($b); });
+        foreach ($subsets as $k) {
+            if (strlen($k) > 0) {
+                echo '\(' . $k . '^+=';
+                $closures[$k]->renderSet(true);
+                echo '\)<br>';
+            }
         }
-        echo '<br>BCNF: ';
+        echo '<br>3NF? ';
+        if ($this->is3NF(true)) {
+            echo 'yes';
+        } else {
+            echo 'no';
+        }
+        echo '<br>BCNF? ';
         if ($this->isBCNF(true)) {
             echo 'yes';
         } else {
             echo 'no';
         }
-        echo '<br>3NF: ';
-        if ($this->is3NF(true)) {
+        echo '<br>4NF? ';
+        if ($this->is4NF(true)) {
+            echo 'yes';
+        } else {
+            echo 'no';
+        }
+        echo '<br>5NF? ';
+        if ($this->is5NF(true)) {
             echo 'yes';
         } else {
             echo 'no';
@@ -700,27 +811,31 @@ class Relation {
 
         echo '<br>';
 
-        echo '<br>BCNF Decomposition: ';
+        echo '<br>BCNF Decomposition<br>';
         $bcnf = $this->decomposeBCNF(true);
+        echo '\(R = ';
         foreach ($bcnf as $ri) {
             $ri->attrs->renderTuple();
-            echo ' ';
         }
-        if (!$this->isDepPres($bcnf)) {
-            echo 'NOT ';
+        echo '\)<br>DP? ';
+        if ($this->isDepPres($bcnf)) {
+            echo 'yes';
+        } else {
+            echo 'no';
         }
-        echo 'Dependency Preserving';
 
-        echo '<br>3NF Decomposition: ';
-        foreach ($this->decompose3NF(true) as $ri) {
+        echo '<br><br>3NF Decomposition<br>';
+        $tnf = $this->decompose3NF(true);
+        echo '\(R = ';
+        foreach ($tnf as $ri) {
             $ri->attrs->renderTuple();
-            echo ' ';
         }
+        echo '\)';
 
-        echo '<br>The world does ';
-        if (!$this->isLossless($bcnf) || !$this->isLossless($this->decompose3NF())) {
-            echo 'NOT AT ALL ';
+        echo '<br><br>Decompositions are ';
+        if (!$this->isLossless($bcnf) || !$this->isLossless($tnf)) {
+            echo 'NOT EVEN AAAAAAAAAAAAAAA ';
         }
-        echo 'make sense.';
+        echo 'both lossless.';
     }
 }
