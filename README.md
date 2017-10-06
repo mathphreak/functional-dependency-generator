@@ -67,7 +67,7 @@ class Relation {
     static function random() {
             // This winds up generating a lot of trivial dependencies
     // Render an individual dependency, optionally in TeX
-    function renderDep($i, $tex = false) {
+    function renderDep($dep, $tex = false) {
     // Render all the dependencies, optionally in TeX
     function renderDeps($tex = false) {
     // Render the entire relation
@@ -126,7 +126,7 @@ class Relation {
         // Erase any leftover dependencies with empty sides
         $deps = array_filter($deps, function ($dep) {
     // Check if this relation is in BCNF
-    function isBCNF() {
+    function isBCNF($verbose = false) {
         // Grab the superkeys
         // For each dependency...
             // If it's trivial...
@@ -134,7 +134,7 @@ class Relation {
                 // If the LHS is a superkey, we're good
                 // If neither of those holds, this is not BCNF
     // Check if this relation is in 3NF
-    function is3NF() {
+    function is3NF($verbose = false) {
         // Grab the superkeys
         // Grab the candidate keys
         // Union all the candidate keys together
@@ -145,14 +145,24 @@ class Relation {
                 // Attrs in RHS can be in a candidate key or in LHS as well
                 // If some attr in RHS is neither...
                     // this is not 3NF
-    // Make [R-$beta, $alpha$beta] from this relation R and an $alpha and $beta
-    function fracture($alpha, $beta) {
+    // Check if this relation is in 4NF
+    function is4NF($verbose = false) {
+        // Check if it's in BCNF first
+        // Look for a simple key
+    // Check if this relation is in 5NF
+    function is5NF($verbose = false) {
+        // Check if it's in 3NF first
+        // Check that all candidate keys are simple
+    // Make [R-$beta, $alpha$beta] from this relation R and an $alpha and $beta, given all the closures
+    function fracture($alpha, $beta, $closures) {
         // make a new Relation with only those attributes
+        // find out the dependencies that matter
         // make a new Relation without beta
+        // find its dependencies too
         // give both back
     // Decompose this relation into BCNF
     // Algorithm from Silberschatz, Korth, Sudarshan "Database System Concepts" 6th ed. fig. 8.11
-    function decomposeBCNF() {
+    function decomposeBCNF($verbose = false) {
         // Start with only R
         // Find F+
         // Until we're done...
@@ -166,7 +176,7 @@ class Relation {
                     // Don't keep looking through the result
     // Decompose this relation into 3NF
     // Algorithm from Silberschatz, Korth, Sudarshan "Database System Concepts" 6th ed. fig. 8.12
-    function decompose3NF() {
+    function decompose3NF($verbose = false) {
         // Grab the canonical cover
         // For each dependency in the canonical cover...
             // Find all the attributes involved
@@ -184,16 +194,13 @@ class Relation {
                 // If they aren't the same but this one is a subset of that one...
                     // Remove this one
     // Check if a decomposition of this relation is dependency preserving
-    function isDepPres($decomp) {
-        // Get all the subsets
-        // For each subset...
-            // Grab the original closure
+    function isDepPres($decomp, $verbose = false) {
+        // For each dependency...
             // Build up the closure within the decomposition
                 // For each relation in the composition...
                     // Merge in the closure of what we already have
-            // If the closure in the decomposition doesn't match the real closure...
+            // If the closure in the decomposition doesn't contain the RHS of the dependency...
                 // The decomposition can't be dependency preserving
-                // var_dump(''.$attrs, ''.$goodClosure, ''.$realClosure);
     // Check if a decomposition of this relation is lossless
     function isLossless($decomp) {
         // If there's only one relation in the decomposition...
@@ -214,4 +221,5 @@ class Relation {
                             // The original decomposition was also lossless
     // Print out a whole bunch of stuff
     function debug() {
+        usort($subsets, function ($a, $b) { return strlen($a) - strlen($b); });
 ```
