@@ -606,6 +606,11 @@ class Relation {
     function decompose3NF($verbose = false) {
         // Grab the canonical cover
         $fc = $this->canonicalCover(false);
+        if ($verbose) {
+            echo '\(F_c=';
+            (new Relation($this->attrs, $fc))->renderDeps(true);
+            echo '\)<br>';
+        }
         $i = 0;
         $result = [];
         // For each dependency in the canonical cover...
@@ -664,16 +669,13 @@ class Relation {
     }
 
     // Check if a decomposition of this relation is dependency preserving
-    function isDepPres($decomp) {
-        // Get all the subsets
-        $allSubsets = $this->attrs->allSubsets();
-        // For each subset...
-        foreach ($allSubsets as $attrs) {
+    function isDepPres($decomp, $verbose = false) {
+        // For each dependency...
+        foreach ($this->deps as $dep) {
+            list($lhs, $rhs) = $dep;
             $changed = true;
-            // Grab the original closure
-            $goodClosure = $this->closure($attrs);
             // Build up the closure within the decomposition
-            $realClosure = clone $attrs;
+            $realClosure = clone $lhs;
             while ($changed) {
                 $changed = false;
                 // For each relation in the composition...
@@ -681,15 +683,19 @@ class Relation {
                     // Merge in the closure of what we already have
                     $newStuff = $ri->closure($realClosure);
                     if (!$realClosure->containsAll($newStuff)) {
-                        $realClosure->addAll($ri->closure($realClosure));
+                        $realClosure->addAll($newStuff);
                         $changed = true;
                     }
                 }
             }
-            // If the closure in the decomposition doesn't match the real closure...
-            if (!$goodClosure->equals($realClosure)) {
+            // If the closure in the decomposition doesn't contain the RHS of the dependency...
+            if (!$realClosure->containsAll($rhs)) {
                 // The decomposition can't be dependency preserving
-                // var_dump(''.$attrs, ''.$goodClosure, ''.$realClosure);
+                if ($verbose) {
+                    echo 'under this decomposition \(' . $lhs . '^+=' . $realClosure . '\) so \(';
+                    $this->renderDep($dep, true);
+                    echo '\) was lost so ';
+                }
                 return false;
             }
         }
@@ -818,7 +824,7 @@ class Relation {
             $ri->attrs->renderTuple();
         }
         echo '\)<br>DP? ';
-        if ($this->isDepPres($bcnf)) {
+        if ($this->isDepPres($bcnf, true)) {
             echo 'yes';
         } else {
             echo 'no';
