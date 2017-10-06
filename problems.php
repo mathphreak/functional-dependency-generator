@@ -36,8 +36,11 @@ require_once('lib_problems.php');
         padding: 2px;
         background-color: #CCC;
     }
-    .secret {
+    #show-secret:not(:checked) + .secret {
         display: none;
+    }
+    .secret {
+        margin: 20px;
     }
     .correct::before, .incorrect::before {
         font-weight: bold;
@@ -373,17 +376,18 @@ require_once('lib_problems.php');
     <input type='submit' name='grade' value='Check Answers & Show Hints'>
     <input type='submit' name='grade' value='Check Answers & Reveal Correct Answers'>
 </form>
+<label for='show-secret'>Explain Everything?</label>
+<input type='checkbox' id='show-secret'>
 <div class="secret">
-<!-- If I had control of the hosting, I could do all sorts of logging.
-Since I don't, I'm leaving debug code in production.
-Deal with it. -->
 <?php
 $rel->debug();
 ?>
 </div>
-<form action='problems.php' method='POST'>
-    <input type="submit" name="reroll" value="Generate New Questions">
-</form>
+<p>
+    <form action='problems.php' method='POST'>
+        <input type="submit" name="reroll" value="Generate New Questions">
+    </form>
+</p>
 <p>Curious? Bored? Check out <a href="https://github.com/mathphreak/functional-dependency-generator">the source for this problem generator</a>.</p>
 </body>
 </html>
