@@ -76,7 +76,7 @@ require_once('lib_problems.php');
     <span class="<?php if ($ptsEarned < $ptsPossible) { ?>in<?php } ?>correct">
         <?php echo $ptsEarned . '/' . $ptsPossible; ?>
     </span>
-<?php } ?>For the following questions, use \(R=<?php $rel->attrs->renderTuple();?>\) and \(\mathcal{F}=<?php $rel->renderDeps(true);?>\).</p>
+<?php } ?>For the following questions, use \(R\) is \(<?php $rel->attrs->renderTuple();?>\) and \(\mathcal{F}=<?php $rel->renderDeps(true);?>\).</p>
 <form action='problems.php' method='POST'>
     <ol>
         <li id="q-closures">

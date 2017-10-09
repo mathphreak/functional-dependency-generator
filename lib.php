@@ -560,7 +560,7 @@ class Relation {
         // Until we're done...
         while (!$done) {
             if ($verbose) {
-                echo '\(R\approx ';
+                echo '\(R\) might be \(';
                 foreach ($result as $ri) {
                     $ri->attrs->renderTuple();
                 }
@@ -651,7 +651,7 @@ class Relation {
             $i++;
         }
         if ($verbose) {
-            echo '\(R\approx ';
+            echo '\(R\) might be \(';
             foreach ($result as $ri) {
                 $ri->attrs->renderTuple();
             }
@@ -764,7 +764,7 @@ class Relation {
 
     // Print out a whole bunch of stuff
     function debug() {
-        echo '\(R=';
+        echo '\(R\) is \(';
         $this->attrs->renderTuple();
         echo '\), \(\mathcal{F}=';
         $this->renderDeps(true);
@@ -825,7 +825,7 @@ class Relation {
 
         echo '<br>BCNF Decomposition<br>';
         $bcnf = $this->decomposeBCNF(true);
-        echo '\(R = ';
+        echo '\(R\) is \(';
         foreach ($bcnf as $ri) {
             $ri->attrs->renderTuple();
         }
@@ -838,7 +838,7 @@ class Relation {
 
         echo '<br><br>3NF Decomposition<br>';
         $tnf = $this->decompose3NF(true);
-        echo '\(R = ';
+        echo '\(R\) is \(';
         foreach ($tnf as $ri) {
             $ri->attrs->renderTuple();
         }
