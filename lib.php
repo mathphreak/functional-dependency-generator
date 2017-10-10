@@ -300,7 +300,7 @@ class Relation {
         // Don't loop infinitely (this doesn't still happen but it's good to be safe)
         $iters = 0;
         // While we just changed something and haven't been running for too long...
-        while ($shrunk && $iters < 1000) {
+        while ($shrunk && $iters < 10000) {
             if ($verbose) {
                 echo '\(F_c\approx';
                 (new Relation($this->attrs, $deps))->renderDeps(true);
@@ -376,7 +376,7 @@ class Relation {
                 }
             }
         }
-        if ($iters >= 1000) {
+        if ($iters >= 10000) {
             echo 'WARNING: Bailed out of canonical cover finding early.';
             if ($verbose) {
                 echo '<pre>';
