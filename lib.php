@@ -579,17 +579,16 @@ class Relation {
                         echo '\) is not BCNF.<br>';
                     }
                     // Find some a->b where a is not a superkey of ri and a and b share nothing
+                    // Let's just do that by finding the dependency that caused a violation of BCNF
                     $riSuperkeys = $ri->superkeys();
-                    $riSubsets = $ri->attrs->allSubsets();
-                    $riAlphas = array_diff($riSubsets, $riSuperkeys);
-                    // We want only alphas that determine a nontrivial beta
-                    $riAlphas = array_filter($riAlphas, function ($alpha) use ($ri) {
-                        return !$alpha->containsAll($ri->closure($alpha));
-                    });
-                    $riAlphas = array_values($riAlphas);
-                    assert(count($riAlphas) > 0);
-                    $alpha = $riAlphas[0];
-                    $beta = $ri->closure($alpha);
+                    foreach ($ri->deps as $dep) {
+                        list($lhs, $rhs) = $dep;
+                        if (!$lhs->containsAll($rhs) && !in_array($lhs, $riSuperkeys)) {
+                            $alpha = $lhs;
+                            $beta = $rhs;
+                            break;
+                        }
+                    }
                     $beta = new AttributeSet(array_diff($beta->contents, $alpha->contents));
                     // Break up $ri into [$ri-$beta, $alpha$beta]
                     $newBits = $ri->fracture($alpha, $beta, $allClosures);
