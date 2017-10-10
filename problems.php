@@ -48,6 +48,9 @@ require_once('lib_problems.php');
     .correct::before {
         content: '\2714';
     }
+    #problem .correct::before {
+        content: '\1F4AF';
+    }
     .correct {
         color: hsl(120, 100%, 30%);
     }
