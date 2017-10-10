@@ -708,11 +708,17 @@ class Relation {
     }
 
     // Check if a decomposition of this relation is lossless
-    function isLossless($decomp) {
+    function isLossless($decomp, $verbose = false, $stack = []) {
         // If there's only one relation in the decomposition...
         if (count($decomp) == 1) {
             // It's lossless iff it has all the same attributes
-            return $decomp[0]->attrs->equals($this->attrs);
+            if ($decomp[0]->attrs->equals($this->attrs)) {
+                if ($verbose && count($stack) == 0) {
+                    echo "it's literally just the original relation<br>";
+                }
+                return true;
+            }
+            return false;
         } else if (count($decomp) == 2) {
             // If it's a binary decomposition...
             list($d0, $d1) = $decomp;
@@ -723,6 +729,18 @@ class Relation {
             $acceptable = array_merge($d0->superkeys(), $d1->superkeys());
             // It's lossless iff the common attributes are a superkey of either relation
             if (in_array($commonAttrs, $acceptable)) {
+                if ($verbose) {
+                    foreach ($stack as $s) {
+                        echo $s . '<br>';
+                    }
+                    echo 'joining \(';
+                    $d0->attrs->renderTuple(true);
+                    echo '\) with \(';
+                    $d1->attrs->renderTuple(true);
+                    echo '\) gives \(';
+                    $this->attrs->renderTuple(true);
+                    echo '\)<br>';
+                }
                 return true;
             }
             return false;
@@ -749,8 +767,16 @@ class Relation {
                         $newDecomp[] = $ab;
                         // Promise we got rid of a relation and aren't recursing infinitely
                         assert(count($newDecomp) < count($decomp));
+                        if ($verbose) {
+                            $newStack = $stack;
+                            $newStack[] = 'joining \((' . implode(',', $a->attrs->contents) .
+                                ')\) with \((' . implode(',', $b->attrs->contents) .
+                                ')\) gives \((' . implode(',', $ab->attrs->contents) . ')\)';
+                        } else {
+                            $newStack = [];
+                        }
                         // If merging that pair resulted in a lossless decomposition...
-                        if ($this->isLossless($newDecomp)) {
+                        if ($this->isLossless($newDecomp, $verbose, $newStack)) {
                             // The original decomposition was also lossless
                             return true;
                         }
@@ -834,6 +860,12 @@ class Relation {
         } else {
             echo 'no';
         }
+        echo '<br>LJ?<br>';
+        if ($this->isLossless($bcnf, true)) {
+            echo 'thankfully, yes, it\'s a lossless join';
+        } else {
+            echo 'No, somehow we followed the algorithm and didn\'t get a lossless join! AAAAAAAAAAA THIS IS BAD THIS IS VERY BAD';
+        }
 
         echo '<br><br>3NF Decomposition<br>';
         $tnf = $this->decompose3NF(true);
@@ -842,11 +874,11 @@ class Relation {
             $ri->attrs->renderTuple();
         }
         echo '\)';
-
-        echo '<br><br>Decompositions are ';
-        if (!$this->isLossless($bcnf) || !$this->isLossless($tnf)) {
-            echo 'NOT EVEN AAAAAAAAAAAAAAA ';
+        echo '<br>LJ?<br>';
+        if ($this->isLossless($tnf, true)) {
+            echo 'thankfully, yes, it\'s lossless too';
+        } else {
+            echo 'Somehow the 3NF algorithm gave us a lossy decomposition. What gives? (This is very bad.)';
         }
-        echo 'both lossless.';
     }
 }
